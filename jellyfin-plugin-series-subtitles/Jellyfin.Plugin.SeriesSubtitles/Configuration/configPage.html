@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <title>Sous-titres par série</title>
+</head>
+<body>
+    <div id="SeriesSubtitlesConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-select,emby-checkbox">
+        <div data-role="content">
+            <div class="content-primary">
+                <form id="SeriesSubtitlesConfigForm">
+                    <div class="sectionTitleContainer flex align-items-center">
+                        <h2 class="sectionTitle">Sous-titres par série</h2>
+                    </div>
+                    <p>Choisissez une série et une langue : tous ses épisodes démarreront avec les sous-titres dans cette langue, sans réglage épisode par épisode.</p>
+
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="ssSearch" label="Filtrer les séries" autocomplete="off" />
+                    </div>
+                    <div class="selectContainer">
+                        <select is="emby-select" id="ssSeries" label="Série"></select>
+                    </div>
+                    <div class="selectContainer">
+                        <select is="emby-select" id="ssLanguage" label="Langue des sous-titres"></select>
+                    </div>
+                    <div>
+                        <button is="emby-button" type="button" id="ssAdd" class="raised button-submit block emby-button">
+                            <span>Ajouter ou remplacer la règle</span>
+                        </button>
+                    </div>
+
+                    <h3>Séries configurées</h3>
+                    <div id="ssRules"></div>
+
+                    <div class="checkboxContainer checkboxContainer-withDescription" style="margin-top: 2em;">
+                        <label class="emby-checkbox-label">
+                            <input is="emby-checkbox" type="checkbox" id="ssOverride" />
+                            <span>Imposer la langue même si le lecteur demande une autre piste</span>
+                        </label>
+                        <div class="fieldDescription checkboxFieldDescription">Décoché (conseillé) : la langue de la série est le choix par défaut, mais on peut encore changer ou couper les sous-titres pour une lecture. Coché : la langue est toujours imposée au lancement.</div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script type="text/javascript">
+            (function () {
+                var pluginId = '59ae2e45-120d-496e-a601-bc16cb28e9f2';
+                var maxSeriesShown = 300;
+                var page = document.querySelector('#SeriesSubtitlesConfigPage');
+                var state = { config: { Rules: [], OverrideClientChoice: false }, series: [] };
+
+                function el(id) {
+                    return page.querySelector('#' + id);
+                }
+
+                function cultureCodes(culture) {
+                    var codes = [];
+                    [culture.ThreeLetterISOLanguageName, culture.TwoLetterISOLanguageName]
+                        .concat(culture.ThreeLetterISOLanguageNames || [])
+                        .forEach(function (code) {
+                            code = (code || '').toLowerCase().trim();
+                            if (code && codes.indexOf(code) === -1) {
+                                codes.push(code);
+                            }
+                        });
+                    return codes;
+                }
+
+                function fillSeries() {
+                    var filter = el('ssSearch').value.toLowerCase().trim();
+                    var select = el('ssSeries');
+                    var shown = 0;
+                    select.innerHTML = '';
+                    state.series.forEach(function (item) {
+                        var name = item.Name || '';
+                        if (shown >= maxSeriesShown || (filter && name.toLowerCase().indexOf(filter) === -1)) {
+                            return;
+                        }
+                        var option = document.createElement('option');
+                        option.value = item.Id;
+                        option.textContent = item.ProductionYear ? name + ' (' + item.ProductionYear + ')' : name;
+                        select.appendChild(option);
+                        shown++;
+                    });
+                }
+
+                function fillLanguages(cultures) {
+                    var select = el('ssLanguage');
+                    select.innerHTML = '';
+                    cultures
+                        .slice()
+                        .sort(function (a, b) {
+                            return (a.DisplayName || '').localeCompare(b.DisplayName || '');
+                        })
+                        .forEach(function (culture) {
+                            var codes = cultureCodes(culture);
+                            if (!codes.length) {
+                                return;
+                            }
+                            var option = document.createElement('option');
+                            option.value = codes.join(',');
+                            option.textContent = culture.DisplayName || culture.Name || codes[0];
+                            if (codes.indexOf('fre') !== -1 || codes.indexOf('fra') !== -1) {
+                                option.selected = true;
+                            }
+                            select.appendChild(option);
+                        });
+                }
+
+                function renderRules() {
+                    var container = el('ssRules');
+                    var rules = state.config.Rules || [];
+                    container.innerHTML = '';
+
+                    if (!rules.length) {
+                        var empty = document.createElement('div');
+                        empty.className = 'fieldDescription';
+                        empty.textContent = 'Aucune série configurée pour le moment.';
+                        container.appendChild(empty);
+                        return;
+                    }
+
+                    rules.forEach(function (rule, index) {
+                        var row = document.createElement('div');
+                        row.className = 'listItem listItem-border';
+
+                        var body = document.createElement('div');
+                        body.className = 'listItemBody two-line';
+
+                        var title = document.createElement('div');
+                        title.className = 'listItemBodyText';
+                        title.textContent = rule.SeriesName;
+
+                        var detail = document.createElement('div');
+                        detail.className = 'listItemBodyText secondary';
+                        detail.textContent = 'Sous-titres : ' + rule.LanguageName + ' (' + rule.LanguageCodes + ')';
+
+                        var remove = document.createElement('button');
+                        remove.type = 'button';
+                        remove.className = 'raised emby-button';
+                        remove.textContent = 'Supprimer';
+                        remove.addEventListener('click', function () {
+                            state.config.Rules.splice(index, 1);
+                            save();
+                        });
+
+                        body.appendChild(title);
+                        body.appendChild(detail);
+                        row.appendChild(body);
+                        row.appendChild(remove);
+                        container.appendChild(row);
+                    });
+                }
+
+                function save() {
+                    Dashboard.showLoadingMsg();
+                    state.config.OverrideClientChoice = el('ssOverride').checked;
+                    return ApiClient.updatePluginConfiguration(pluginId, state.config).then(function (result) {
+                        Dashboard.processPluginConfigurationUpdateResult(result);
+                        renderRules();
+                    });
+                }
+
+                function load() {
+                    Dashboard.showLoadingMsg();
+                    var seriesUrl = ApiClient.getUrl('Items', {
+                        userId: ApiClient.getCurrentUserId(),
+                        IncludeItemTypes: 'Series',
+                        Recursive: true,
+                        SortBy: 'SortName',
+                        SortOrder: 'Ascending',
+                        EnableImages: false,
+                        EnableUserData: false,
+                        EnableTotalRecordCount: false
+                    });
+
+                    Promise.all([
+                        ApiClient.getPluginConfiguration(pluginId),
+                        ApiClient.getJSON(seriesUrl),
+                        ApiClient.getJSON(ApiClient.getUrl('Localization/Cultures'))
+                    ]).then(function (results) {
+                        state.config = results[0] || {};
+                        state.config.Rules = state.config.Rules || [];
+                        state.series = (results[1] && results[1].Items) || [];
+
+                        el('ssOverride').checked = !!state.config.OverrideClientChoice;
+                        fillSeries();
+                        fillLanguages(results[2] || []);
+                        renderRules();
+                        Dashboard.hideLoadingMsg();
+                    }).catch(function (error) {
+                        Dashboard.hideLoadingMsg();
+                        console.error('Series Subtitles', error);
+                        Dashboard.alert('Impossible de charger les séries ou les réglages du plugin.');
+                    });
+                }
+
+                el('ssSearch').addEventListener('input', fillSeries);
+
+                el('ssOverride').addEventListener('change', save);
+
+                el('ssAdd').addEventListener('click', function () {
+                    var seriesSelect = el('ssSeries');
+                    var languageSelect = el('ssLanguage');
+                    var series = seriesSelect.options[seriesSelect.selectedIndex];
+                    var language = languageSelect.options[languageSelect.selectedIndex];
+
+                    if (!series || !language) {
+                        Dashboard.alert('Choisissez une série et une langue.');
+                        return;
+                    }
+
+                    var rules = (state.config.Rules || []).filter(function (rule) {
+                        return rule.SeriesId !== series.value;
+                    });
+                    rules.push({
+                        SeriesId: series.value,
+                        SeriesName: series.textContent,
+                        LanguageName: language.textContent,
+                        LanguageCodes: language.value
+                    });
+                    rules.sort(function (a, b) {
+                        return (a.SeriesName || '').localeCompare(b.SeriesName || '');
+                    });
+
+                    state.config.Rules = rules;
+                    save();
+                });
+
+                el('SeriesSubtitlesConfigForm').addEventListener('submit', function (event) {
+                    event.preventDefault();
+                    return false;
+                });
+
+                page.addEventListener('pageshow', load);
+            })();
+        </script>
+    </div>
+</body>
+</html>
