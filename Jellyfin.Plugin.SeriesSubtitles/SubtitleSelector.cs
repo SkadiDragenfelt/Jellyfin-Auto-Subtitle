@@ -6,7 +6,7 @@ using MediaBrowser.Model.Entities;
 namespace Jellyfin.Plugin.SeriesSubtitles;
 
 /// <summary>
-/// Choisit la piste de sous-titres correspondant à une langue.
+/// Picks the subtitle track matching a language.
 /// </summary>
 internal static class SubtitleSelector
 {
@@ -14,10 +14,10 @@ internal static class SubtitleSelector
     private static readonly char[] RegionSeparators = { '-', '_' };
 
     /// <summary>
-    /// Transforme "fre,fra,fr" en liste de codes en minuscules.
+    /// Turns "fre,fra,fr" into a list of lower-case codes.
     /// </summary>
-    /// <param name="value">Codes séparés par des virgules.</param>
-    /// <returns>Les codes, ou null s'il n'y en a aucun.</returns>
+    /// <param name="value">Comma separated codes.</param>
+    /// <returns>The codes, or null when there are none.</returns>
     public static string[]? ParseCodes(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -36,12 +36,12 @@ internal static class SubtitleSelector
     }
 
     /// <summary>
-    /// Renvoie la meilleure piste de sous-titres dans la langue demandée :
-    /// d'abord les sous-titres complets (ni "forcés" ni malentendants), puis la piste par défaut.
+    /// Returns the best subtitle track in the requested language:
+    /// full subtitles first (neither forced nor hearing impaired), then the default track.
     /// </summary>
-    /// <param name="streams">Pistes du fichier.</param>
-    /// <param name="codes">Codes de langue acceptés.</param>
-    /// <returns>La piste retenue, ou null si aucune ne correspond.</returns>
+    /// <param name="streams">Tracks of the file.</param>
+    /// <param name="codes">Accepted language codes.</param>
+    /// <returns>The selected track, or null when none matches.</returns>
     public static MediaStream? Pick(IEnumerable<MediaStream>? streams, string[] codes)
     {
         if (streams is null)
@@ -71,7 +71,7 @@ internal static class SubtitleSelector
             return true;
         }
 
-        // "fr-FR", "pt_BR" : on compare aussi la partie avant la région.
+        // "fr-FR", "pt_BR": also compare the part before the region.
         var cut = value.IndexOfAny(RegionSeparators);
         return cut > 0 && Array.IndexOf(codes, value.Substring(0, cut)) >= 0;
     }

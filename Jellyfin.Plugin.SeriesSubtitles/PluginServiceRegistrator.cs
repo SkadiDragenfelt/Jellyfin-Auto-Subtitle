@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Jellyfin.Plugin.SeriesSubtitles;
 
 /// <summary>
-/// Branche le filtre sur toutes les réponses de l'API du serveur.
+/// Registers the filter on every server API response.
 /// </summary>
 public class PluginServiceRegistrator : IPluginServiceRegistrator
 {

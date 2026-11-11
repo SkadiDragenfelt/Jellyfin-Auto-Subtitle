@@ -1,68 +1,75 @@
-# Series Subtitles — une langue de sous-titres par série (plugin Jellyfin)
+# Series Subtitles — one subtitle language per series (Jellyfin plugin)
 
-Vous choisissez une série et une langue dans le tableau de bord : tous les épisodes de cette série
-démarrent avec les sous-titres dans cette langue, sans réglage épisode par épisode.
+Pick a series and a language in the dashboard: every episode of that series starts with subtitles
+in that language, without setting it episode by episode.
 
-> **État :** code source écrit pour Jellyfin 12 et 10.11, **pas encore compilé ni testé sur un serveur**.
-> Il faut le compiler une fois (voir ci-dessous) pour obtenir le fichier `.dll` à installer.
+> **Status:** builds for Jellyfin 12 and 10.11. Not yet tested on a live server — feedback welcome.
 
-## Compiler
+## Install
 
-Choisissez la commande qui correspond à votre serveur (Tableau de bord → version affichée).
+1. In Jellyfin, open **Dashboard → Plugins → Repositories** and add a new repository with this URL:
 
-| Serveur Jellyfin | Outil à installer | Commande |
+   ```
+   https://raw.githubusercontent.com/SkadiDragenfelt/Jellyfin-Auto-Subtitle/main/manifest.json
+   ```
+
+2. Open the plugin **Catalog**, install **Series Subtitles**, then restart Jellyfin.
+
+Jellyfin picks the right build by itself: plugin 2.x for Jellyfin 12, plugin 1.x for Jellyfin 10.11.
+
+### Manual install
+
+Download the zip for your server from the [latest release](https://github.com/SkadiDragenfelt/Jellyfin-Auto-Subtitle/releases/latest),
+extract the DLL into a `SeriesSubtitles` folder inside the server's `plugins` folder, then restart Jellyfin.
+
+- Linux: `/var/lib/jellyfin/plugins/`
+- Docker: `/config/plugins/`
+- Windows: `C:\ProgramData\Jellyfin\Server\plugins\` or `%LOCALAPPDATA%\jellyfin\plugins\`
+
+## Use
+
+**Dashboard → Plugins → Series Subtitles**:
+
+1. Filter and pick the series.
+2. Pick the language.
+3. Add the rule. It is saved immediately, no restart needed.
+
+The settings page is currently in French.
+
+The strict option forces the language even when the player asks for another track. When it is off,
+the series language is the default and can still be changed during playback.
+
+## How it works
+
+- When an episode starts, the player asks the server for playback information
+  (`POST /Items/{id}/PlaybackInfo`). The plugin writes the subtitle track of the chosen language into
+  that request; the server then does its usual work, including burning subtitles in when the player needs it.
+- In responses describing an episode, the default track is replaced, so the episode page preselects
+  the right language.
+- When several tracks match the language, full subtitles win (neither forced nor hearing impaired),
+  then the track flagged as default.
+
+## Limits
+
+- A rule applies to every user of the server.
+- A track without a language tag ("Undetermined") cannot be recognised. Name external files like `Episode.fr.srt`.
+- When an episode has no subtitles in the chosen language, nothing changes for that episode.
+- A player that ignores the default track sent by the server is not affected.
+
+## Build
+
+| Jellyfin server | SDK | Command |
 | --- | --- | --- |
-| 12.x | [SDK .NET 10](https://dotnet.microsoft.com/download) | `dotnet publish Jellyfin.Plugin.SeriesSubtitles -c Release -o out` |
-| 10.11.x | [SDK .NET 9](https://dotnet.microsoft.com/download) | `dotnet publish Jellyfin.Plugin.SeriesSubtitles -c Release -p:JellyfinVersion=10.11.0 -o out` |
+| 12.x | .NET 10 | `dotnet publish Jellyfin.Plugin.SeriesSubtitles -c Release -o out` |
+| 10.11.x | .NET 9 | `dotnet publish Jellyfin.Plugin.SeriesSubtitles -c Release -p:JellyfinVersion=10.11.0 -o out` |
 
-Le fichier utile est `out/Jellyfin.Plugin.SeriesSubtitles.dll`.
+Every push to `main` builds both versions, publishes them as a GitHub release and updates `manifest.json`
+(see `.github/workflows/build.yml`).
 
-**Sans rien installer :** déposez ce dossier dans un dépôt GitHub. Le fichier
-`.github/workflows/build.yml` compile les deux versions automatiquement ; les DLL se téléchargent
-dans l'onglet *Actions* du dépôt.
+## Files
 
-## Installer
-
-1. Arrêtez Jellyfin.
-2. Dans le dossier `plugins` du serveur, créez un dossier `SeriesSubtitles_1.0.0.0` et copiez-y la DLL.
-   - Linux : `/var/lib/jellyfin/plugins/`
-   - Docker : `/config/plugins/`
-   - Windows : `C:\ProgramData\Jellyfin\Server\plugins\` ou `%LOCALAPPDATA%\jellyfin\plugins\`
-3. Redémarrez Jellyfin.
-
-## Utiliser
-
-Tableau de bord → Plugins → **Series Subtitles** :
-
-1. Filtrez et choisissez la série.
-2. Choisissez la langue.
-3. « Ajouter ou remplacer la règle ». L'enregistrement est immédiat, sans redémarrage.
-
-L'option « Imposer la langue même si le lecteur demande une autre piste » rend la règle stricte.
-Décochée, la langue de la série est le choix par défaut et reste modifiable pendant une lecture.
-
-## Fonctionnement
-
-- Au lancement d'un épisode, le lecteur demande au serveur les informations de lecture
-  (`POST /Items/{id}/PlaybackInfo`). Le plugin y inscrit la piste de sous-titres de la langue choisie ;
-  le serveur fait ensuite son travail habituel, incrustation dans l'image comprise si le lecteur en a besoin.
-- Dans les réponses qui décrivent un épisode, la piste par défaut est remplacée, pour que la fiche de
-  l'épisode présélectionne la bonne langue.
-- Piste retenue quand il y en a plusieurs dans la langue : sous-titres complets d'abord
-  (ni « forcés » ni malentendants), puis la piste marquée par défaut.
-
-## Limites
-
-- La règle vaut pour tous les utilisateurs du serveur.
-- Une piste sans étiquette de langue (« Indéterminé ») ne peut pas être reconnue. Pour un fichier
-  externe, nommez-le `Episode.fr.srt`.
-- Si un épisode n'a pas de sous-titres dans la langue choisie, rien n'est changé pour cet épisode.
-- Un lecteur qui ignore la piste par défaut envoyée par le serveur ne sera pas affecté.
-
-## Fichiers
-
-- `Plugin.cs` : déclaration du plugin et de sa page de réglages.
-- `PluginServiceRegistrator.cs` : branche le filtre sur l'API du serveur.
-- `SeriesSubtitleFilter.cs` : applique la règle aux demandes de lecture et aux fiches d'épisodes.
-- `SubtitleSelector.cs` : choix de la piste dans la langue demandée.
-- `Configuration/` : réglages enregistrés et page du tableau de bord.
+- `Plugin.cs`: plugin declaration and settings page registration.
+- `PluginServiceRegistrator.cs`: hooks the filter into the server API.
+- `SeriesSubtitleFilter.cs`: applies the rule to playback requests and episode responses.
+- `SubtitleSelector.cs`: picks the track in the requested language.
+- `Configuration/`: stored settings and dashboard page.

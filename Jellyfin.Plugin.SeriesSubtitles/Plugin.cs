@@ -9,15 +9,15 @@ using MediaBrowser.Model.Serialization;
 namespace Jellyfin.Plugin.SeriesSubtitles;
 
 /// <summary>
-/// Impose une langue de sous-titres par série.
+/// Forces a subtitle language per series.
 /// </summary>
 public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="Plugin"/> class.
     /// </summary>
-    /// <param name="applicationPaths">Chemins de l'application.</param>
-    /// <param name="xmlSerializer">Sérialiseur XML.</param>
+    /// <param name="applicationPaths">Application paths.</param>
+    /// <param name="xmlSerializer">XML serializer.</param>
     public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer)
         : base(applicationPaths, xmlSerializer)
     {
@@ -33,7 +33,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public override string Name => "Series Subtitles";
 
     /// <inheritdoc />
-    public override string Description => "Impose une langue de sous-titres pour toute une série.";
+    public override string Description => "Forces a subtitle language for every episode of a series.";
 
     /// <inheritdoc />
     public override Guid Id => Guid.Parse("59ae2e45-120d-496e-a601-bc16cb28e9f2");

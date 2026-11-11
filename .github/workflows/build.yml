@@ -1,8 +1,19 @@
-name: Compiler le plugin
+name: Build and release
 
 on:
   push:
+    branches: [main]
+    paths-ignore:
+      - manifest.json
+      - "**.md"
   workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # Bump this tag, and the plugin versions below, to publish a new release.
+  RELEASE_TAG: v1.0.0
 
 jobs:
   build:
@@ -11,12 +22,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Plugin 2.x targets Jellyfin 12, plugin 1.x targets Jellyfin 10.11.
           - label: jellyfin-12
             jellyfin: "12.0.0"
+            abi: "12.0.0.0"
             dotnet: "10.0.x"
+            version: "2.0.0.0"
           - label: jellyfin-10.11
             jellyfin: "10.11.0"
+            abi: "10.11.0.0"
             dotnet: "9.0.x"
+            version: "1.0.0.0"
     steps:
       - uses: actions/checkout@v4
 
@@ -24,16 +40,57 @@ jobs:
         with:
           dotnet-version: ${{ matrix.dotnet }}
 
-      - name: Compiler
+      - name: Build
         run: >
           dotnet publish Jellyfin.Plugin.SeriesSubtitles -c Release
           -p:JellyfinVersion=${{ matrix.jellyfin }}
-          -o out/SeriesSubtitles_1.0.0.0
+          -p:PluginVersion=${{ matrix.version }}
+          -o out
 
-      - name: Ne garder que la DLL du plugin
-        run: find out -type f ! -name 'Jellyfin.Plugin.SeriesSubtitles.dll' -delete
+      - name: Package
+        run: |
+          mkdir dist
+          cd out
+          zip "../dist/series-subtitles_${{ matrix.version }}_jellyfin-${{ matrix.abi }}.zip" Jellyfin.Plugin.SeriesSubtitles.dll
 
       - uses: actions/upload-artifact@v4
         with:
           name: SeriesSubtitles-${{ matrix.label }}
-          path: out
+          path: dist/*.zip
+
+  release:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/*.zip --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/*.zip \
+              --title "Series Subtitles $RELEASE_TAG" \
+              --notes "Plugin 2.x is for Jellyfin 12, plugin 1.x is for Jellyfin 10.11."
+          fi
+
+      - name: Update the plugin repository manifest
+        run: |
+          python3 .github/scripts/update_manifest.py dist "$RELEASE_TAG"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          if git diff --cached --quiet; then
+            echo "Manifest unchanged"
+          else
+            git commit -m "Update plugin manifest for $RELEASE_TAG"
+            git push
+          fi

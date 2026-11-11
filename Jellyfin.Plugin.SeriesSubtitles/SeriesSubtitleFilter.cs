@@ -17,12 +17,12 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.SeriesSubtitles;
 
 /// <summary>
-/// Filtre global de l'API.
-/// 1. Avant la demande de lecture (POST /Items/{id}/PlaybackInfo) : si l'épisode appartient à une
-///    série configurée, la piste de sous-titres de la langue choisie est injectée dans la demande.
-///    Le serveur fait alors tout le reste lui-même (y compris l'incrustation si nécessaire).
-/// 2. Après les réponses qui décrivent un épisode : la piste par défaut est remplacée, pour que
-///    la fiche de l'épisode présélectionne la bonne langue.
+/// Global API filter.
+/// 1. Before a playback request (POST /Items/{id}/PlaybackInfo): when the episode belongs to a
+///    configured series, the subtitle track of the chosen language is injected into the request.
+///    The server then does everything else itself (including burn-in when needed).
+/// 2. After responses describing an episode: the default track is replaced, so that the
+///    episode page preselects the right language.
 /// </summary>
 public class SeriesSubtitleFilter : IAsyncActionFilter
 {
@@ -38,8 +38,8 @@ public class SeriesSubtitleFilter : IAsyncActionFilter
     /// <summary>
     /// Initializes a new instance of the <see cref="SeriesSubtitleFilter"/> class.
     /// </summary>
-    /// <param name="libraryManager">Bibliothèque Jellyfin.</param>
-    /// <param name="logger">Journal.</param>
+    /// <param name="libraryManager">Jellyfin library manager.</param>
+    /// <param name="logger">Logger.</param>
     public SeriesSubtitleFilter(ILibraryManager libraryManager, ILogger<SeriesSubtitleFilter> logger)
     {
         _libraryManager = libraryManager;
@@ -63,7 +63,7 @@ public class SeriesSubtitleFilter : IAsyncActionFilter
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Series Subtitles : erreur avant la demande de lecture");
+            _logger.LogError(ex, "Series Subtitles: error while preparing the playback request");
         }
 
         var executed = await next().ConfigureAwait(false);
@@ -74,7 +74,7 @@ public class SeriesSubtitleFilter : IAsyncActionFilter
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Series Subtitles : erreur lors de la modification de la réponse");
+            _logger.LogError(ex, "Series Subtitles: error while patching the response");
         }
     }
 
@@ -96,8 +96,8 @@ public class SeriesSubtitleFilter : IAsyncActionFilter
         return context.ActionArguments.TryGetValue(name, out var value) ? value : null;
     }
 
-    // Le corps de la requête (PlaybackInfoDto) vit dans Jellyfin.Api, qui n'est pas
-    // référencé par les plugins : on le lit donc par réflexion.
+    // The request body (PlaybackInfoDto) lives in Jellyfin.Api, which plugins do not
+    // reference, so it is read through reflection.
     private static object? ReadBodyProperty(object? body, string propertyName)
     {
         return body?.GetType().GetProperty(propertyName)?.GetValue(body);
@@ -125,7 +125,7 @@ public class SeriesSubtitleFilter : IAsyncActionFilter
 
         var request = new PlaybackRequest(codes);
 
-        // GET /Items/{id}/PlaybackInfo n'accepte pas de piste : seule la réponse sera corrigée.
+        // GET /Items/{id}/PlaybackInfo takes no track argument: only the response gets patched.
         var parameters = descriptor.Parameters;
         if (!parameters.Any(p => string.Equals(p.Name, SubtitleIndexArgument, StringComparison.Ordinal))
             || !parameters.Any(p => string.Equals(p.Name, MediaSourceIdArgument, StringComparison.Ordinal)))
@@ -147,7 +147,7 @@ public class SeriesSubtitleFilter : IAsyncActionFilter
             ?? (ReadBodyProperty(body, "SubtitleStreamIndex") as int?);
         if (explicitIndex.HasValue && !config.OverrideClientChoice)
         {
-            // Le lecteur a choisi une piste précise (ou "aucun") : on la respecte.
+            // The player asked for a specific track (or "none"): respect it.
             request.Done = true;
             return request;
         }
@@ -171,24 +171,24 @@ public class SeriesSubtitleFilter : IAsyncActionFilter
 
         if (target is null)
         {
-            // Plusieurs versions du fichier et aucune précisée : la réponse sera corrigée après coup.
+            // Several versions of the file and none specified: the response gets patched afterwards.
             return request;
         }
 
         var stream = SubtitleSelector.Pick(target.MediaStreams, codes);
         if (stream is null)
         {
-            _logger.LogDebug("Series Subtitles : aucun sous-titre {Codes} pour {Episode}", string.Join(",", codes), episode.Name);
+            _logger.LogDebug("Series Subtitles: no {Codes} subtitle for {Episode}", string.Join(",", codes), episode.Name);
             request.Done = true;
             return request;
         }
 
-        // Le serveur n'applique la piste demandée que si la source est nommée dans la demande.
+        // The server only applies the requested track when the media source is named in the request.
         context.ActionArguments[SubtitleIndexArgument] = stream.Index;
         context.ActionArguments[MediaSourceIdArgument] = target.Id;
         request.Done = true;
 
-        _logger.LogDebug("Series Subtitles : piste {Index} imposée pour {Episode}", stream.Index, episode.Name);
+        _logger.LogDebug("Series Subtitles: track {Index} forced for {Episode}", stream.Index, episode.Name);
         return request;
     }
 
@@ -273,7 +273,7 @@ public class SeriesSubtitleFilter : IAsyncActionFilter
 
         if (keepBurnedInChoice)
         {
-            // L'adresse de lecture est déjà calculée : on ne touche pas aux pistes incrustées dans l'image.
+            // The stream URL is already built: leave burned-in tracks alone.
             if (stream.DeliveryMethod == SubtitleDeliveryMethod.Encode)
             {
                 return;
@@ -298,7 +298,7 @@ public class SeriesSubtitleFilter : IAsyncActionFilter
 
         public string[] Codes { get; }
 
-        // true = rien à corriger dans la réponse (déjà traité, ou choix du lecteur respecté).
+        // true = nothing to patch in the response (already handled, or player choice respected).
         public bool Done { get; set; }
     }
 }
