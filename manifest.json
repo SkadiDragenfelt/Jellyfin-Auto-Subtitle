@@ -1,0 +1,28 @@
+[
+  {
+    "guid": "59ae2e45-120d-496e-a601-bc16cb28e9f2",
+    "name": "Series Subtitles",
+    "description": "Pick a subtitle language per series: every episode starts with subtitles in that language, without setting it episode by episode.",
+    "overview": "Force a subtitle language for a whole series",
+    "owner": "SkadiDragenfelt",
+    "category": "General",
+    "versions": [
+      {
+        "version": "2.0.0.0",
+        "changelog": "Build for Jellyfin 12.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/SkadiDragenfelt/Jellyfin-Auto-Subtitle/releases/download/v1.0.0/series-subtitles_2.0.0.0_jellyfin-12.0.0.0.zip",
+        "checksum": "40a5e3543df4184e5d18738ed7b90862",
+        "timestamp": "2026-11-11T18:41:17Z"
+      },
+      {
+        "version": "1.0.0.0",
+        "changelog": "Build for Jellyfin 10.11",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/SkadiDragenfelt/Jellyfin-Auto-Subtitle/releases/download/v1.0.0/series-subtitles_1.0.0.0_jellyfin-10.11.0.0.zip",
+        "checksum": "9d37fa1c254b03ffdc902ddb10b7de6b",
+        "timestamp": "2026-11-11T18:41:17Z"
+      }
+    ]
+  }
+]
