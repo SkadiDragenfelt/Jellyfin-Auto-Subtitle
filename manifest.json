@@ -2,11 +2,19 @@
   {
     "guid": "59ae2e45-120d-496e-a601-bc16cb28e9f2",
     "name": "Series Subtitles",
-    "description": "Pick a subtitle language per series: every episode starts with subtitles in that language, without setting it episode by episode.",
-    "overview": "Force a subtitle language for a whole series",
+    "description": "Choose the subtitles a video starts with, per library or per series (for example anime in French, movies with no subtitles), without setting it on every episode.",
+    "overview": "Subtitle language rules per library or per series",
     "owner": "SkadiDragenfelt",
     "category": "General",
     "versions": [
+      {
+        "version": "2.1.0.0",
+        "changelog": "Library rules, no-subtitles rules, add several series at once, English settings page (build for Jellyfin 12.0)",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/SkadiDragenfelt/Jellyfin-Auto-Subtitle/releases/download/v1.1.0/series-subtitles_2.1.0.0_jellyfin-12.0.0.0.zip",
+        "checksum": "ffa0836345335544d69eda371285b82a",
+        "timestamp": "2026-11-11T18:59:20Z"
+      },
       {
         "version": "2.0.0.0",
         "changelog": "Build for Jellyfin 12.0",
@@ -14,6 +22,14 @@
         "sourceUrl": "https://github.com/SkadiDragenfelt/Jellyfin-Auto-Subtitle/releases/download/v1.0.0/series-subtitles_2.0.0.0_jellyfin-12.0.0.0.zip",
         "checksum": "40a5e3543df4184e5d18738ed7b90862",
         "timestamp": "2026-11-11T18:41:17Z"
+      },
+      {
+        "version": "1.1.0.0",
+        "changelog": "Library rules, no-subtitles rules, add several series at once, English settings page (build for Jellyfin 10.11)",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/SkadiDragenfelt/Jellyfin-Auto-Subtitle/releases/download/v1.1.0/series-subtitles_1.1.0.0_jellyfin-10.11.0.0.zip",
+        "checksum": "be43ba162ed79cb7372c3b396c124200",
+        "timestamp": "2026-11-11T18:59:20Z"
       },
       {
         "version": "1.0.0.0",
