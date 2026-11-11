@@ -6,6 +6,59 @@ using MediaBrowser.Model.Entities;
 namespace Jellyfin.Plugin.SeriesSubtitles;
 
 /// <summary>
+/// What a rule asks for: subtitles in a language, or no subtitles at all.
+/// </summary>
+internal sealed class SubtitleTarget
+{
+    /// <summary>
+    /// Value stored in a rule to turn subtitles off.
+    /// </summary>
+    public const string OffValue = "none";
+
+    private SubtitleTarget(bool off, string[] codes)
+    {
+        Off = off;
+        Codes = codes;
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether subtitles must be turned off.
+    /// </summary>
+    public bool Off { get; }
+
+    /// <summary>
+    /// Gets the accepted language codes.
+    /// </summary>
+    public string[] Codes { get; }
+
+    /// <summary>
+    /// Reads the value stored in a rule ("none" or "fre,fra,fr").
+    /// </summary>
+    /// <param name="value">Stored value.</param>
+    /// <returns>The target, or null when the value is empty.</returns>
+    public static SubtitleTarget? Parse(string? value)
+    {
+        if (string.Equals(value?.Trim(), OffValue, StringComparison.OrdinalIgnoreCase))
+        {
+            return new SubtitleTarget(true, Array.Empty<string>());
+        }
+
+        var codes = SubtitleSelector.ParseCodes(value);
+        return codes is null ? null : new SubtitleTarget(false, codes);
+    }
+
+    /// <summary>
+    /// Returns the track index to use: -1 for "no subtitles", null when no track matches.
+    /// </summary>
+    /// <param name="streams">Tracks of the file.</param>
+    /// <returns>The index, or null.</returns>
+    public int? ResolveIndex(IEnumerable<MediaStream>? streams)
+    {
+        return Off ? -1 : SubtitleSelector.Pick(streams, Codes)?.Index;
+    }
+}
+
+/// <summary>
 /// Picks the subtitle track matching a language.
 /// </summary>
 internal static class SubtitleSelector

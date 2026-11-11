@@ -23,9 +23,9 @@ def main() -> None:
     plugin = {
         "guid": "59ae2e45-120d-496e-a601-bc16cb28e9f2",
         "name": "Series Subtitles",
-        "description": "Pick a subtitle language per series: every episode starts with subtitles "
-        "in that language, without setting it episode by episode.",
-        "overview": "Force a subtitle language for a whole series",
+        "description": "Choose the subtitles a video starts with, per library or per series "
+        "(for example anime in French, movies with no subtitles), without setting it on every episode.",
+        "overview": "Subtitle language rules per library or per series",
         "owner": repo.split("/")[0],
         "category": "General",
         "versions": [],
@@ -52,7 +52,7 @@ def main() -> None:
         old = versions.get(version)
         versions[version] = {
             "version": version,
-            "changelog": f"Build for Jellyfin {abi.rsplit('.', 2)[0]}",
+            "changelog": f"{os.environ.get('CHANGELOG', 'New release')} (build for Jellyfin {abi.rsplit('.', 2)[0]})",
             "targetAbi": abi,
             "sourceUrl": f"https://github.com/{repo}/releases/download/{tag}/{archive.name}",
             "checksum": checksum,

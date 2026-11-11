@@ -13,7 +13,7 @@ permissions:
 
 env:
   # Bump this tag, and the plugin versions below, to publish a new release.
-  RELEASE_TAG: v1.0.0
+  RELEASE_TAG: v1.1.0
 
 jobs:
   build:
@@ -27,12 +27,12 @@ jobs:
             jellyfin: "12.0.0"
             abi: "12.0.0.0"
             dotnet: "10.0.x"
-            version: "2.0.0.0"
+            version: "2.1.0.0"
           - label: jellyfin-10.11
             jellyfin: "10.11.0"
             abi: "10.11.0.0"
             dotnet: "9.0.x"
-            version: "1.0.0.0"
+            version: "1.1.0.0"
     steps:
       - uses: actions/checkout@v4
 
@@ -83,6 +83,8 @@ jobs:
           fi
 
       - name: Update the plugin repository manifest
+        env:
+          CHANGELOG: "Library rules, no-subtitles rules, add several series at once, English settings page"
         run: |
           python3 .github/scripts/update_manifest.py dist "$RELEASE_TAG"
           git config user.name "github-actions[bot]"

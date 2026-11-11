@@ -9,7 +9,7 @@ using MediaBrowser.Model.Serialization;
 namespace Jellyfin.Plugin.SeriesSubtitles;
 
 /// <summary>
-/// Forces a subtitle language per series.
+/// Sets the subtitle language per library or per series.
 /// </summary>
 public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
@@ -33,7 +33,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public override string Name => "Series Subtitles";
 
     /// <inheritdoc />
-    public override string Description => "Forces a subtitle language for every episode of a series.";
+    public override string Description => "Sets the subtitles a video starts with, per library or per series.";
 
     /// <inheritdoc />
     public override Guid Id => Guid.Parse("59ae2e45-120d-496e-a601-bc16cb28e9f2");

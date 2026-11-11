@@ -9,15 +9,20 @@ namespace Jellyfin.Plugin.SeriesSubtitles.Configuration;
 public class PluginConfiguration : BasePluginConfiguration
 {
     /// <summary>
-    /// Gets or sets a value indicating whether the series language also replaces
+    /// Gets or sets a value indicating whether a rule also replaces
     /// a subtitle track explicitly requested by the player.
     /// </summary>
     public bool OverrideClientChoice { get; set; }
 
     /// <summary>
-    /// Gets or sets the rules: one series, one language.
+    /// Gets or sets the series rules. They win over library rules.
     /// </summary>
     public SeriesSubtitleRule[] Rules { get; set; } = Array.Empty<SeriesSubtitleRule>();
+
+    /// <summary>
+    /// Gets or sets the library rules, applied to every video of a library.
+    /// </summary>
+    public LibrarySubtitleRule[] LibraryRules { get; set; } = Array.Empty<LibrarySubtitleRule>();
 }
 
 /// <summary>
@@ -41,7 +46,35 @@ public class SeriesSubtitleRule
     public string LanguageName { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the equivalent language codes, comma separated (e.g. "fre,fra,fr").
+    /// Gets or sets the equivalent language codes, comma separated (e.g. "fre,fra,fr"),
+    /// or "none" to turn subtitles off.
+    /// </summary>
+    public string LanguageCodes { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Maps a library to a subtitle language.
+/// </summary>
+public class LibrarySubtitleRule
+{
+    /// <summary>
+    /// Gets or sets the Jellyfin id of the library.
+    /// </summary>
+    public string LibraryId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the library name.
+    /// </summary>
+    public string LibraryName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the language name (display only).
+    /// </summary>
+    public string LanguageName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the equivalent language codes, comma separated (e.g. "fre,fra,fr"),
+    /// or "none" to turn subtitles off.
     /// </summary>
     public string LanguageCodes { get; set; } = string.Empty;
 }

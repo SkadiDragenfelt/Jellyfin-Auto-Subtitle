@@ -1,9 +1,11 @@
-# Series Subtitles — one subtitle language per series (Jellyfin plugin)
+# Series Subtitles — subtitle rules per library or per series (Jellyfin plugin)
 
-Pick a series and a language in the dashboard: every episode of that series starts with subtitles
-in that language, without setting it episode by episode.
+Choose which subtitles a video starts with, once, instead of setting it on every episode:
 
-> **Status:** builds for Jellyfin 12 and 10.11. Not yet tested on a live server — feedback welcome.
+- **Per library**: for example *Anime* in French, *Movies* with no subtitles. New videos added to the library follow the rule automatically.
+- **Per series**: one or several series at a time. A series rule wins over the rule of its library.
+
+Works on Jellyfin 12 and 10.11.
 
 ## Install
 
@@ -28,24 +30,22 @@ extract the DLL into a `SeriesSubtitles` folder inside the server's `plugins` fo
 
 ## Use
 
-**Dashboard → Plugins → Series Subtitles**:
+**Dashboard → Plugins → Series Subtitles**. Changes are saved immediately, no restart needed.
 
-1. Filter and pick the series.
-2. Pick the language.
-3. Add the rule. It is saved immediately, no restart needed.
-
-The settings page is currently in French.
-
-The strict option forces the language even when the player asks for another track. When it is off,
-the series language is the default and can still be changed during playback.
+- **Library rules**: pick a library, pick a language or *No subtitles*, add the rule.
+- **Series rules**: filter the list, tick one or several series (or *Select all shown*), pick a language
+  or *No subtitles*, add the rule.
+- **Apply rules even when the player asks for another track**: off by default, so a rule sets the
+  default track and subtitles can still be changed during playback. Turn it on to always apply the rule
+  when playback starts.
 
 ## How it works
 
-- When an episode starts, the player asks the server for playback information
-  (`POST /Items/{id}/PlaybackInfo`). The plugin writes the subtitle track of the chosen language into
+- When a video starts, the player asks the server for playback information
+  (`POST /Items/{id}/PlaybackInfo`). The plugin writes the subtitle track required by the rule into
   that request; the server then does its usual work, including burning subtitles in when the player needs it.
-- In responses describing an episode, the default track is replaced, so the episode page preselects
-  the right language.
+- In responses describing a video, the default track is replaced, so the item page preselects
+  the right track.
 - When several tracks match the language, full subtitles win (neither forced nor hearing impaired),
   then the track flagged as default.
 
@@ -53,7 +53,7 @@ the series language is the default and can still be changed during playback.
 
 - A rule applies to every user of the server.
 - A track without a language tag ("Undetermined") cannot be recognised. Name external files like `Episode.fr.srt`.
-- When an episode has no subtitles in the chosen language, nothing changes for that episode.
+- When a video has no subtitles in the chosen language, nothing changes for that video.
 - A player that ignores the default track sent by the server is not affected.
 
 ## Build
@@ -70,6 +70,6 @@ Every push to `main` builds both versions, publishes them as a GitHub release an
 
 - `Plugin.cs`: plugin declaration and settings page registration.
 - `PluginServiceRegistrator.cs`: hooks the filter into the server API.
-- `SeriesSubtitleFilter.cs`: applies the rule to playback requests and episode responses.
-- `SubtitleSelector.cs`: picks the track in the requested language.
+- `SeriesSubtitleFilter.cs`: applies the rules to playback requests and item responses.
+- `SubtitleSelector.cs`: picks the track required by a rule.
 - `Configuration/`: stored settings and dashboard page.

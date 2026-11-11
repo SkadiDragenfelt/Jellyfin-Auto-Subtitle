@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.SeriesSubtitles.Configuration;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Dlna;
@@ -18,11 +19,12 @@ namespace Jellyfin.Plugin.SeriesSubtitles;
 
 /// <summary>
 /// Global API filter.
-/// 1. Before a playback request (POST /Items/{id}/PlaybackInfo): when the episode belongs to a
-///    configured series, the subtitle track of the chosen language is injected into the request.
+/// 1. Before a playback request (POST /Items/{id}/PlaybackInfo): when a rule covers the video,
+///    the subtitle track it asks for is injected into the request.
 ///    The server then does everything else itself (including burn-in when needed).
-/// 2. After responses describing an episode: the default track is replaced, so that the
-///    episode page preselects the right language.
+/// 2. After responses describing a video: the default track is replaced, so that the
+///    item page preselects the right track.
+/// A series rule wins over the rule of the library the series is in.
 /// </summary>
 public class SeriesSubtitleFilter : IAsyncActionFilter
 {
@@ -50,7 +52,7 @@ public class SeriesSubtitleFilter : IAsyncActionFilter
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
         var config = Plugin.Instance?.Configuration;
-        if (config?.Rules is null || config.Rules.Length == 0)
+        if (config is null || !HasRules(config))
         {
             await next().ConfigureAwait(false);
             return;
@@ -78,17 +80,10 @@ public class SeriesSubtitleFilter : IAsyncActionFilter
         }
     }
 
-    private static string[]? FindCodes(PluginConfiguration config, Guid seriesId)
+    private static bool HasRules(PluginConfiguration config)
     {
-        foreach (var rule in config.Rules)
-        {
-            if (rule is not null && Guid.TryParse(rule.SeriesId, out var id) && id == seriesId)
-            {
-                return SubtitleSelector.ParseCodes(rule.LanguageCodes);
-            }
-        }
-
-        return null;
+        return (config.Rules is not null && config.Rules.Length > 0)
+            || (config.LibraryRules is not null && config.LibraryRules.Length > 0);
     }
 
     private static object? GetArgument(ActionExecutingContext context, string name)
@@ -103,6 +98,59 @@ public class SeriesSubtitleFilter : IAsyncActionFilter
         return body?.GetType().GetProperty(propertyName)?.GetValue(body);
     }
 
+    private SubtitleTarget? ResolveTarget(BaseItem? item, PluginConfiguration config)
+    {
+        if (item is not Video)
+        {
+            return null;
+        }
+
+        if (item is Episode episode && config.Rules is not null)
+        {
+            foreach (var rule in config.Rules)
+            {
+                if (rule is not null && Guid.TryParse(rule.SeriesId, out var seriesId) && seriesId == episode.SeriesId)
+                {
+                    var target = SubtitleTarget.Parse(rule.LanguageCodes);
+                    if (target is not null)
+                    {
+                        return target;
+                    }
+                }
+            }
+        }
+
+        if (config.LibraryRules is null || config.LibraryRules.Length == 0)
+        {
+            return null;
+        }
+
+        foreach (var folder in _libraryManager.GetCollectionFolders(item))
+        {
+            foreach (var rule in config.LibraryRules)
+            {
+                if (rule is null)
+                {
+                    continue;
+                }
+
+                var sameId = Guid.TryParse(rule.LibraryId, out var libraryId) && libraryId == folder.Id;
+                var sameName = !string.IsNullOrEmpty(rule.LibraryName)
+                    && string.Equals(rule.LibraryName, folder.Name, StringComparison.OrdinalIgnoreCase);
+                if (sameId || sameName)
+                {
+                    var target = SubtitleTarget.Parse(rule.LanguageCodes);
+                    if (target is not null)
+                    {
+                        return target;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
     private PlaybackRequest? PreparePlaybackRequest(ActionExecutingContext context, PluginConfiguration config)
     {
         if (context.ActionDescriptor is not ControllerActionDescriptor descriptor
@@ -112,18 +160,14 @@ public class SeriesSubtitleFilter : IAsyncActionFilter
             return null;
         }
 
-        if (_libraryManager.GetItemById(itemId) is not Episode episode)
+        var item = _libraryManager.GetItemById(itemId);
+        var target = ResolveTarget(item, config);
+        if (item is null || target is null)
         {
             return null;
         }
 
-        var codes = FindCodes(config, episode.SeriesId);
-        if (codes is null)
-        {
-            return null;
-        }
-
-        var request = new PlaybackRequest(codes);
+        var request = new PlaybackRequest(target);
 
         // GET /Items/{id}/PlaybackInfo takes no track argument: only the response gets patched.
         var parameters = descriptor.Parameters;
@@ -158,37 +202,37 @@ public class SeriesSubtitleFilter : IAsyncActionFilter
             requestedSourceId = ReadBodyProperty(body, "MediaSourceId") as string;
         }
 
-        var sources = episode.GetMediaSources(false);
-        MediaSourceInfo? target = null;
+        var sources = item.GetMediaSources(false);
+        MediaSourceInfo? source = null;
         if (!string.IsNullOrWhiteSpace(requestedSourceId))
         {
-            target = sources.FirstOrDefault(s => string.Equals(s.Id, requestedSourceId, StringComparison.OrdinalIgnoreCase));
+            source = sources.FirstOrDefault(s => string.Equals(s.Id, requestedSourceId, StringComparison.OrdinalIgnoreCase));
         }
         else if (sources.Count == 1)
         {
-            target = sources[0];
+            source = sources[0];
         }
 
-        if (target is null)
+        if (source is null)
         {
             // Several versions of the file and none specified: the response gets patched afterwards.
             return request;
         }
 
-        var stream = SubtitleSelector.Pick(target.MediaStreams, codes);
-        if (stream is null)
+        var index = target.ResolveIndex(source.MediaStreams);
+        if (!index.HasValue)
         {
-            _logger.LogDebug("Series Subtitles: no {Codes} subtitle for {Episode}", string.Join(",", codes), episode.Name);
+            _logger.LogDebug("Series Subtitles: no {Codes} subtitle for {Item}", string.Join(",", target.Codes), item.Name);
             request.Done = true;
             return request;
         }
 
         // The server only applies the requested track when the media source is named in the request.
-        context.ActionArguments[SubtitleIndexArgument] = stream.Index;
-        context.ActionArguments[MediaSourceIdArgument] = target.Id;
+        context.ActionArguments[SubtitleIndexArgument] = index.Value;
+        context.ActionArguments[MediaSourceIdArgument] = source.Id;
         request.Done = true;
 
-        _logger.LogDebug("Series Subtitles: track {Index} forced for {Episode}", stream.Index, episode.Name);
+        _logger.LogDebug("Series Subtitles: track {Index} forced for {Item}", index.Value, item.Name);
         return request;
     }
 
@@ -209,7 +253,7 @@ public class SeriesSubtitleFilter : IAsyncActionFilter
 
                 foreach (var source in response.MediaSources)
                 {
-                    ApplyDefault(source, request.Codes, true);
+                    ApplyDefault(source, request.Target, true);
                 }
 
                 break;
@@ -239,42 +283,50 @@ public class SeriesSubtitleFilter : IAsyncActionFilter
         }
     }
 
-    private static void PatchDto(BaseItemDto? dto, PluginConfiguration config)
+    private void PatchDto(BaseItemDto? dto, PluginConfiguration config)
     {
-        if (dto?.MediaSources is null || dto.SeriesId is not Guid seriesId)
+        // Only items sent with their media sources (item pages, mostly) need a lookup.
+        if (dto?.MediaSources is null)
         {
             return;
         }
 
-        var codes = FindCodes(config, seriesId);
-        if (codes is null)
+        var target = ResolveTarget(_libraryManager.GetItemById(dto.Id), config);
+        if (target is null)
         {
             return;
         }
 
         foreach (var source in dto.MediaSources)
         {
-            ApplyDefault(source, codes, false);
+            ApplyDefault(source, target, false);
         }
     }
 
-    private static void ApplyDefault(MediaSourceInfo? source, string[] codes, bool keepBurnedInChoice)
+    private static void ApplyDefault(MediaSourceInfo? source, SubtitleTarget target, bool keepBurnedInChoice)
     {
         if (source?.MediaStreams is null)
         {
             return;
         }
 
-        var stream = SubtitleSelector.Pick(source.MediaStreams, codes);
-        if (stream is null || source.DefaultSubtitleStreamIndex == stream.Index)
+        var index = target.ResolveIndex(source.MediaStreams);
+        if (!index.HasValue || source.DefaultSubtitleStreamIndex == index.Value)
         {
+            return;
+        }
+
+        if (index.Value < 0 && !source.DefaultSubtitleStreamIndex.HasValue)
+        {
+            // Subtitles are already off.
             return;
         }
 
         if (keepBurnedInChoice)
         {
             // The stream URL is already built: leave burned-in tracks alone.
-            if (stream.DeliveryMethod == SubtitleDeliveryMethod.Encode)
+            var wanted = source.MediaStreams.FirstOrDefault(s => s.Index == index.Value);
+            if (wanted is not null && wanted.DeliveryMethod == SubtitleDeliveryMethod.Encode)
             {
                 return;
             }
@@ -286,17 +338,17 @@ public class SeriesSubtitleFilter : IAsyncActionFilter
             }
         }
 
-        source.DefaultSubtitleStreamIndex = stream.Index;
+        source.DefaultSubtitleStreamIndex = index.Value;
     }
 
     private sealed class PlaybackRequest
     {
-        public PlaybackRequest(string[] codes)
+        public PlaybackRequest(SubtitleTarget target)
         {
-            Codes = codes;
+            Target = target;
         }
 
-        public string[] Codes { get; }
+        public SubtitleTarget Target { get; }
 
         // true = nothing to patch in the response (already handled, or player choice respected).
         public bool Done { get; set; }
